@@ -6,7 +6,7 @@ export type { ClaudeTextInferenceOptions } from "./claude.js";
 
 export interface ClaudeProviderOptions {
   type: "claude";
-  model: string;
+  model?: string;
   apiKey?: string;
   authToken?: string;
   thinking?: boolean;

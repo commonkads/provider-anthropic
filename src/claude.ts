@@ -3,11 +3,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   InferenceOptions,
   IInferenceProvider,
+  ProviderFileConfig,
 } from "@commonkads/engine";
-import { createDiagnosticsLogger } from "@commonkads/engine";
+import {
+  createDiagnosticsLogger,
+  loadProviderConfig,
+} from "@commonkads/engine";
 
 const DEFAULT_MAX_TOKENS = 8192;
 const logger = createDiagnosticsLogger("providers:claude");
+
+type AnthropicFileConfig = ProviderFileConfig & { authToken?: string };
 
 export interface ClaudeTextInferenceOptions {
   apiKey?: string;
@@ -16,6 +22,8 @@ export interface ClaudeTextInferenceOptions {
   maxTokens?: number;
   /** Adaptive thinking for better reasoning on complex evaluation steps (default false). Requires a Claude 4.6+ model. */
   thinking?: boolean;
+  /** Path to a provider config file; defaults to ~/.commonkads/anthropic.yml. */
+  configFile?: string;
   /** Injectable for testing; defaults to a real `Anthropic` client. */
   client?: Anthropic;
 }
@@ -23,18 +31,61 @@ export interface ClaudeTextInferenceOptions {
 /** `IInferenceProvider` backed by the Anthropic Messages API. */
 export class ClaudeTextInference implements IInferenceProvider {
   private readonly client: Anthropic;
+  private readonly modelId: string;
 
   constructor(
-    private readonly modelId: string,
+    modelId?: string,
     private readonly options: ClaudeTextInferenceOptions = {},
   ) {
+    const fileConfig = loadProviderConfig<AnthropicFileConfig>(
+      "anthropic",
+      options.configFile,
+    );
+
+    let resolvedModel: string;
+    let modelSource: string;
+    if (modelId !== undefined) {
+      resolvedModel = modelId;
+      modelSource = "explicit-arg";
+    } else if (fileConfig.modelId !== undefined) {
+      resolvedModel = fileConfig.modelId;
+      modelSource = "config-file";
+    } else {
+      throw new Error(
+        "modelId is required: pass it or set modelId in ~/.commonkads/providers/anthropic.yml",
+      );
+    }
+    this.modelId = resolvedModel;
+
+    const resolvedApiKey =
+      options.apiKey ?? process.env["ANTHROPIC_API_KEY"] ?? fileConfig.apiKey;
+    const resolvedAuthToken =
+      options.authToken ??
+      process.env["ANTHROPIC_AUTH_TOKEN"] ??
+      fileConfig.authToken;
+    const apiKeySource =
+      options.apiKey !== undefined
+        ? "explicit-arg"
+        : process.env["ANTHROPIC_API_KEY"] !== undefined
+          ? "env-var"
+          : fileConfig.apiKey !== undefined
+            ? "config-file"
+            : "sdk-default";
+
+    logger.info(`config: model="${resolvedModel}" source=${modelSource}`);
+    if (resolvedApiKey !== undefined || resolvedAuthToken !== undefined) {
+      logger.info(`config: apiKey=*** source=${apiKeySource}`);
+    } else {
+      logger.info(`config: apiKey=<none> source=${apiKeySource}`);
+    }
+
     this.client =
       options.client ??
       new Anthropic(
-        options.apiKey
-          ? { apiKey: options.apiKey }
-          : options.authToken
-            ? { authToken: options.authToken }
+        resolvedApiKey
+          ? { apiKey: resolvedApiKey }
+          : resolvedAuthToken
+            ? { authToken: resolvedAuthToken }
             : undefined,
       );
   }
