@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import type {
   InferenceOptions,
-  IInferenceProvider,
+  InferenceProvider,
   ProviderFileConfig,
 } from "@commonkads/engine";
 import {
@@ -28,8 +28,8 @@ export interface ClaudeTextInferenceOptions {
   client?: Anthropic;
 }
 
-/** `IInferenceProvider` backed by the Anthropic Messages API. */
-export class ClaudeTextInference implements IInferenceProvider {
+/** `InferenceProvider` backed by the Anthropic Messages API. */
+export class ClaudeTextInference implements InferenceProvider {
   private readonly client: Anthropic;
   private readonly modelId: string;
 
